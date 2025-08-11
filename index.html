@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chess Timer</title>
+<style>
+    body {
+        background: linear-gradient(135deg, #141E30, #243B55);
+        color: white;
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+    .setup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+    }
+    .setup-card {
+        background: rgba(0,0,0,0.6);
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        text-align: center;
+        width: 90%;
+        max-width: 400px;
+    }
+    input {
+        padding: 8px;
+        margin: 8px;
+        width: 80px;
+        text-align: center;
+        font-size: 16px;
+        border: none;
+        border-radius: 6px;
+    }
+    .start-btn {
+        padding: 12px 24px;
+        font-size: 20px;
+        margin-top: 15px;
+        background: #1DB954;
+        border: none;
+        border-radius: 8px;
+        color: white;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+    .start-btn:hover {
+        background: #17a74a;
+        transform: scale(1.05);
+    }
+    .timer {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    .time {
+        font-size: 60px;
+        font-weight: bold;
+        text-shadow: 0 0 5px rgba(255,255,255,0.6);
+    }
+    .player-btn {
+        width: 100%;
+        flex: 1;
+        font-size: 40px;
+        font-weight: bold;
+        color: white;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    .p1-btn { background-color: #505050; }
+    .p2-btn { background-color: #03ad0b; }
+    .player-btn:hover:enabled {
+        filter: brightness(1.3);
+        transform: scale(1.02);
+    }
+    .active { filter: brightness(1.8); }
+    .player-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+    .thinking-time-display {
+        font-size: 22px;
+        background: rgba(255,255,255,0.15);
+        padding: 5px 12px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+    }
+    .center-thinking {
+        text-align: center;
+        padding: 8px;
+        font-size: 20px;
+        background: rgba(0,0,0,0.4);
+    }
+    @media (max-width: 600px) {
+        .time { font-size: 40px; }
+        .player-btn { font-size: 28px; }
+        .thinking-time-display { font-size: 16px; }
+    }
+</style>
+</head>
+<body>
+
+<!-- ====== SETUP MENU ====== -->
+<div class="setup">
+    <div class="setup-card">
+        <h2>♟ Chess Timer Setup</h2>
+        <div>
+            Player 1 Time (minutes): <input type="number" id="p1time" value="10">
+        </div>
+        <div>
+            Player 2 Time (minutes): <input type="number" id="p2time" value="10">
+        </div>
+        <div>
+            Increment per move (seconds): <input type="number" id="increment" value="0">
+        </div>
+        <div>
+            Thinking time (seconds): <input type="number" id="thinkingInput" value="60">
+        </div>
+        <button class="start-btn" onclick="startGame()">Start Game</button>
+    </div>
+</div>
+
+<!-- ====== GAME SCREEN ====== -->
+<div class="timer" style="display:none;">
+    <button id="btnP1" class="player-btn p1-btn" onclick="switchPlayer(1)">
+        <div class="thinking-time-display" id="thinkP1">01:00</div>
+        <div id="timeP1" class="time">10:00</div>
+        PLAYER 1
+    </button>
+
+
+
+        <div class="center-thinking">
+        <button onclick="restartGame()" style="
+            padding: 5px 10px;
+            font-size: 18px;
+            background: #ff4b4b;
+            color: white;
+            border: none;
+            border-radius: 2px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.1s;
+        ">🔄 Ulang</button>
+    </div>
+
+    <button id="btnP2" class="player-btn p2-btn" onclick="switchPlayer(2)">
+        <div class="thinking-time-display" id="thinkP2">01:00</div>
+        <div id="timeP2" class="time">10:00</div>
+        PLAYER 2
+    </button>
+</div>
+    <div class="center-thinking">
+        TURN THINKING: <span id="centerThinking">01:00</span>
+    </div>
+<audio id="loseSound" src="lose.mp3" preload="auto"></audio>
+
+<script>
+let totalP1, totalP2, increment, thinkingTime;
+let activePlayer = null;
+let lastSwitch;
+let timerInterval;
+let thinkingTimerRemaining;
+let thinkingTimerInterval;
+
+function startGame() {
+    totalP1 = parseInt(document.getElementById("p1time").value) * 60;
+    totalP2 = parseInt(document.getElementById("p2time").value) * 60;
+    increment = parseInt(document.getElementById("increment").value);
+    thinkingTime = parseInt(document.getElementById("thinkingInput").value);
+
+    document.querySelector(".setup").style.display = "none";
+    document.querySelector(".timer").style.display = "flex";
+
+    updateDisplay();
+
+    activePlayer = 1;
+    lastSwitch = Date.now();
+    highlightActivePlayer();
+    startThinkingTimer();
+    timerInterval = setInterval(updateTimer, 200);
+}
+
+function switchPlayer(playerClicked) {
+    if (activePlayer === playerClicked) {
+        let now = Date.now();
+        let elapsed = Math.floor((now - lastSwitch) / 1000);
+
+        if (activePlayer === 1) {
+            totalP1 -= elapsed;
+            totalP1 += increment;
+            activePlayer = 2;
+        } else {
+            totalP2 -= elapsed;
+            totalP2 += increment;
+            activePlayer = 1;
+        }
+        lastSwitch = Date.now();
+        updateDisplay();
+        highlightActivePlayer();
+        startThinkingTimer();
+    }
+}
+
+function updateTimer() {
+    let now = Date.now();
+    let elapsed = Math.floor((now - lastSwitch) / 1000);
+
+    if (activePlayer === 1) {
+        let remaining = totalP1 - elapsed;
+        if (remaining <= 0) {
+            gameOver(1, "Total Time");
+            return;
+        }
+        document.getElementById("timeP1").textContent = formatTime(remaining);
+    } else {
+        let remaining = totalP2 - elapsed;
+        if (remaining <= 0) {
+            gameOver(2, "Total Time");
+            return;
+        }
+        document.getElementById("timeP2").textContent = formatTime(remaining);
+    }
+}
+
+function updateDisplay() {
+    document.getElementById("timeP1").textContent = formatTime(totalP1);
+    document.getElementById("timeP2").textContent = formatTime(totalP2);
+}
+
+function formatTime(seconds) {
+    let m = Math.floor(seconds / 60);
+    let s = seconds % 60;
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+}
+
+function gameOver(player, reason) {
+    clearInterval(timerInterval);
+    clearInterval(thinkingTimerInterval);
+    document.getElementById("btnP1").disabled = true;
+    document.getElementById("btnP2").disabled = true;
+    document.getElementById("loseSound").play();
+    alert(`Player ${player} kalah! (${reason})`);
+}
+
+function highlightActivePlayer() {
+    document.getElementById("btnP1").classList.remove("active");
+    document.getElementById("btnP2").classList.remove("active");
+    document.getElementById("btnP1").disabled = true;
+    document.getElementById("btnP2").disabled = true;
+
+    if (activePlayer === 1) {
+        document.getElementById("btnP1").classList.add("active");
+        document.getElementById("btnP1").disabled = false;
+    } else {
+        document.getElementById("btnP2").classList.add("active");
+        document.getElementById("btnP2").disabled = false;
+    }
+}
+
+function startThinkingTimer() {
+    clearInterval(thinkingTimerInterval);
+    thinkingTimerRemaining = thinkingTime;
+    updateThinkingUI();
+
+    thinkingTimerInterval = setInterval(() => {
+        thinkingTimerRemaining--;
+        updateThinkingUI();
+        if (thinkingTimerRemaining <= 0) {
+            gameOver(activePlayer, "Thinking Time");
+        }
+    }, 1000);
+}
+
+function updateThinkingUI() {
+    if (activePlayer === 1) {
+        document.getElementById("thinkP1").textContent = formatTime(thinkingTimerRemaining);
+        document.getElementById("thinkP2").textContent = formatTime(thinkingTime);
+    } else {
+        document.getElementById("thinkP2").textContent = formatTime(thinkingTimerRemaining);
+        document.getElementById("thinkP1").textContent = formatTime(thinkingTime);
+    }
+    document.getElementById("centerThinking").textContent = formatTime(thinkingTimerRemaining);
+}
+
+function restartGame() {
+    clearInterval(timerInterval);
+    clearInterval(thinkingTimerInterval);
+    document.querySelector(".timer").style.display = "none";
+    document.querySelector(".setup").style.display = "flex";
+
+    // Reset nilai input ke default
+    document.getElementById("p1time").value = 10;
+    document.getElementById("p2time").value = 10;
+    document.getElementById("increment").value = 0;
+    document.getElementById("thinkingInput").value = 60;
+}
+
+</script>
+
+</body>
+</html>
